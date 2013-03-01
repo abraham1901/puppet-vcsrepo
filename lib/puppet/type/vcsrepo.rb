@@ -25,6 +25,12 @@ Puppet::Type.newtype(:vcsrepo) do
   feature :modules,
           "The repository contains modules that can be chosen of"
 
+  feature :export,
+  	  "Create an unversioned copy of a tree"
+
+  feature :sparse,
+	  "Sparse checkout"
+
   ensurable do
     attr_accessor :latest
 
@@ -86,7 +92,6 @@ Puppet::Type.newtype(:vcsrepo) do
         raise Puppet::Error, "Could not find provider"
       end
     end
-
   end
 
   newparam(:path) do
@@ -165,19 +170,20 @@ Puppet::Type.newtype(:vcsrepo) do
     desc "The repository module to manage"
   end
 
-  newparam(:export) do
+  newparam :export, :boolean => true, :required_features => [:export] do
     desc "Export SVN files rather than checkout"
     newvalues(:true, :false)
     defaultto false
   end
-
-  newparam(:sparse) do
+  newparam :sparse, :boolean => true, :required_features => [:sparse] do
     desc "Sparse checkout"
-    newvalues(:true, :false) 
+    newvalues(:true, :false)
     defaultto false
   end
 
-  newparam(:filename) do
+  newparam :filename, :boolean => true, :required_features => [:filename] do
     desc "Single file to checkout"
+    newvalues(:true, :false)
+    defaultto false
   end
 end

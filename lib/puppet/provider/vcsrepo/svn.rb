@@ -6,7 +6,7 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
   optional_commands :svn      => 'svn',
                     :svnadmin => 'svnadmin'
 
-  defaultfor :svn => :exists
+#  defaultfor :svn => :exists
   has_features :filesystem_types, :reference_tracking, :basic_auth, :export, :sparse, :filename
 
   def create
@@ -74,7 +74,10 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
   private
 
   def checkout_repository(source, path, revision)
-    if @resource.value(:export)
+	has_should = [:export, :filename, :sparse ].select { |param| @resource.value(param) == :true }
+    if has_should.length > 1
+      raise Puppet::Error, "You cannot specify #{has_should.join(" and ")} on this action (only one)"
+    elsif @resource.value(:export)
       args = buildargs.push('export')
     elsif @resource.value(:sparse)
       args = buildargs.push('checkout')

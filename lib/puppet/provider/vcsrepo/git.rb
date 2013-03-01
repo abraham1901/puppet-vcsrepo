@@ -5,7 +5,7 @@ Puppet::Type.type(:vcsrepo).provide(:git, :parent => Puppet::Provider::Vcsrepo) 
 
   ##TODO modify the commands below so that the su - is included
   optional_commands :git => 'git'
-  defaultfor :git => :exists
+#  defaultfor :git => :exists
   has_features :bare_repositories, :reference_tracking, :ssh_identity
 
   def create
