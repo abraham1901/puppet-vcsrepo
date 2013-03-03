@@ -31,6 +31,9 @@ Puppet::Type.newtype(:vcsrepo) do
   feature :sparse,
 	  "Sparse checkout"
 
+  feature :filename,
+	  "Single file to checkout"
+
   ensurable do
     attr_accessor :latest
 
