@@ -21,7 +21,9 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
   end
 
   def working_copy_exists?
-    if File.file?(@resource.value(:path))
+    if !@resource.value(:source) && !@resource.value(:filename)
+      File.directory?(@resource.value(:path))
+    elsif File.file?(@resource.value(:path))
       File.directory?(File.join(File.dirname(@resource.value(:path)), '.svn'))
     else
       File.directory?(File.join(@resource.value(:path), '.svn'))
