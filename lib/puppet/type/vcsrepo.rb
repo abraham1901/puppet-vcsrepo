@@ -22,6 +22,9 @@ Puppet::Type.newtype(:vcsrepo) do
   feature :ssh_identity,
           "The provider supports a configurable SSH identity file"
 
+  feature :user,
+          "The provider can run as a different user"
+
   feature :modules,
           "The repository contains modules that can be chosen of"
 
@@ -34,6 +37,30 @@ Puppet::Type.newtype(:vcsrepo) do
   feature :filename,
 	  "Single file to checkout"
 
+  feature :multiple_remotes,
+          "The repository tracks multiple remote repositories"
+
+  feature :configuration,
+          "The configuration directory to use"
+
+  feature :cvs_rsh,
+          "The provider understands the CVS_RSH environment variable"
+
+  feature :depth,
+          "The provider can do shallow clones or set scope limit"
+
+  feature :branch,
+          "The name of the branch"
+
+  feature :p4config,
+          "The provider understands Perforce Configuration"
+
+  feature :submodules,
+          "The repository contains submodules which can be optionally initialized"
+
+  feature :conflict,
+          "The provider supports automatic conflict resolution"
+
   ensurable do
     attr_accessor :latest
 
@@ -41,23 +68,36 @@ Puppet::Type.newtype(:vcsrepo) do
       @should ||= []
 
       case should
-        when :present
-          return true unless [:absent, :purged, :held].include?(is)
-        when :latest
-          if is == :latest
-            return true
-          else
-            return false
-          end
+      when :present
+        return true unless [:absent, :purged, :held].include?(is)
+      when :latest
+        if is == :latest
+          return true
+        else
+          return false
+        end
+      when :bare
+        return is == :bare
+      when :mirror
+        return is == :mirror
       end
     end
 
     newvalue :present do
+      notice "Creating repository from present"
       provider.create
     end
 
     newvalue :bare, :required_features => [:bare_repositories] do
-      provider.create
+      if !provider.exists?
+        provider.create
+      end
+    end
+
+    newvalue :mirror, :required_features => [:bare_repositories] do
+      if !provider.exists?
+        provider.create
+      end
     end
 
     newvalue :absent do
@@ -65,7 +105,7 @@ Puppet::Type.newtype(:vcsrepo) do
     end
 
     newvalue :latest, :required_features => [:reference_tracking] do
-      if provider.exists?
+      if provider.exists? && !@resource.value(:force)
         if provider.respond_to?(:update_references)
           provider.update_references
         end
@@ -77,6 +117,7 @@ Puppet::Type.newtype(:vcsrepo) do
         notice "Updating to latest '#{reference}' revision"
         provider.revision = reference
       else
+        notice "Creating repository from latest"
         provider.create
       end
     end
@@ -97,7 +138,7 @@ Puppet::Type.newtype(:vcsrepo) do
     end
   end
 
-  newparam(:path) do
+  newparam :path do
     desc "Absolute path to repository"
     isnamevar
     validate do |value|
@@ -108,24 +149,24 @@ Puppet::Type.newtype(:vcsrepo) do
     end
   end
 
-  newparam(:source) do
+  newparam :source do
     desc "The source URI for the repository"
   end
 
-  newparam(:fstype, :required_features => [:filesystem_types]) do
+  newparam :fstype, :required_features => [:filesystem_types] do
     desc "Filesystem type"
   end
 
-  newproperty(:revision) do
+  newproperty :revision do
     desc "The revision of the repository"
     newvalue(/^\S+$/)
   end
 
-  newparam(:owner) do
+  newparam :owner do
     desc "The user/uid that owns the repository files"
   end
 
-  newparam(:group) do
+  newparam :group do
     desc "The group/gid that owns the repository files"
   end
 
@@ -142,7 +183,7 @@ Puppet::Type.newtype(:vcsrepo) do
     desc "Files to be excluded from the repository"
   end
 
-  newparam(:force) do
+  newparam :force do
     desc "Force repository creation, destroying any files on the path in the process."
     newvalues(:true, :false)
     defaultto false
@@ -173,20 +214,48 @@ Puppet::Type.newtype(:vcsrepo) do
     desc "The repository module to manage"
   end
 
-  newparam :export, :boolean => true, :required_features => [:export] do
-    desc "Export SVN files rather than checkout"
-    newvalues(:true, :false)
-    defaultto false
-  end
-  newparam :sparse, :boolean => true, :required_features => [:sparse] do
-    desc "Sparse checkout"
-    newvalues(:true, :false)
-    defaultto false
+  newparam :remote, :required_features => [:multiple_remotes] do
+    desc "The remote repository to track"
+    defaultto "origin"
   end
 
-  newparam :filename, :boolean => true, :required_features => [:filename] do
-    desc "Single file to checkout"
+  newparam :configuration, :required_features => [:configuration]  do
+    desc "The configuration directory to use"
+  end
+
+  newparam :cvs_rsh, :required_features => [:cvs_rsh] do
+    desc "The value to be used for the CVS_RSH environment variable."
+  end
+
+  newparam :depth, :required_features => [:depth] do
+    desc "The value to be used to do a shallow clone."
+  end
+
+  newparam :branch, :required_features => [:branch] do
+    desc "The name of the branch to clone."
+  end
+
+  newparam :p4config, :required_features => [:p4config] do
+    desc "The Perforce P4CONFIG environment."
+  end
+
+  newparam :submodules, :required_features => [:submodules] do
+    desc "Initialize and update each submodule in the repository."
     newvalues(:true, :false)
-    defaultto false
+    defaultto true
+  end
+
+  newparam :conflict do
+    desc "The action to take if conflicts exist between repository and working copy"
+  end
+
+  newparam :trust_server_cert do
+    desc "Trust server certificate"
+    newvalues(:true, :false)
+    defaultto :false
+  end
+
+  autorequire(:package) do
+    ['git', 'git-core', 'mercurial']
   end
 end

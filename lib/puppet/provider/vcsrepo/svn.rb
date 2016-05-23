@@ -3,11 +3,11 @@ require File.join(File.dirname(__FILE__), '..', 'vcsrepo')
 Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) do
   desc "Supports Subversion repositories"
 
-  optional_commands :svn      => 'svn',
-                    :svnadmin => 'svnadmin'
+  commands :svn      => 'svn',
+           :svnadmin => 'svnadmin',
+           :svnlook  => 'svnlook'
 
-#  defaultfor :svn => :exists
-  has_features :filesystem_types, :reference_tracking, :basic_auth, :export, :sparse, :filename
+  has_features :filesystem_types, :reference_tracking, :basic_auth, :configuration, :conflict, :depth
 
   def create
     if !@resource.value(:source) && !@resource.value(:filename)
@@ -15,19 +15,22 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
     else
       checkout_repository(@resource.value(:source),
                           @resource.value(:path),
-                          @resource.value(:revision))
+                          @resource.value(:revision),
+                          @resource.value(:depth))
     end
     update_owner
   end
 
   def working_copy_exists?
-    if !@resource.value(:source) && !@resource.value(:filename)
-      File.directory?(@resource.value(:path))
-    elsif File.file?(@resource.value(:path))
-      File.directory?(File.join(File.dirname(@resource.value(:path)), '.svn'))
-    else
-      File.directory?(File.join(@resource.value(:path), '.svn'))
+    if File.directory?(@resource.value(:path))
+      # :path is an svn checkout
+      return true if File.directory?(File.join(@resource.value(:path), '.svn'))
+      if File.file?(File.join(@resource.value(:path), 'format'))
+        # :path is an svn server
+        return true if svnlook('uuid', @resource.value(:path))
+      end
     end
+    false
   end
 
   def exists?
@@ -39,10 +42,8 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
   end
 
   def latest?
-    if revision < latest then
-      return false
-    else
-      return true
+    at_path do
+      (self.revision >= self.latest) and (@resource.value(:source) == self.sourceurl)
     end
   end
 
@@ -54,22 +55,57 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
       args.push('--no-auth-cache')
       args.push('--trust-server-cert')
     end
-    return args
+
+    if @resource.value(:force)
+      args.push('--force')
+    end
+
+    if @resource.value(:configuration)
+      args.push('--config-dir', @resource.value(:configuration))
+    end
+
+    if @resource.value(:trust_server_cert) != :false
+      args.push('--trust-server-cert')
+    end
+
+    args
   end
 
   def latest
-    args = buildargs.push('info', '-r', 'HEAD', @resource.value(:path))
-    svn(*args)[/^Last Changed Rev:\s+(\d+)/m, 1]
+    args = buildargs.push('info', '-r', 'HEAD')
+    at_path do
+      svn(*args)[/^Revision:\s+(\d+)/m, 1]
+    end
+  end
+
+  def sourceurl
+    args = buildargs.push('info')
+    at_path do
+      svn(*args)[/^URL:\s+(\S+)/m, 1]
+    end
   end
 
   def revision
-    args = buildargs.push('info', @resource.value(:path))
-    svn(*args)[/^Last Changed Rev:\s+(\d+)/m, 1]
+    args = buildargs.push('info')
+    at_path do
+      svn(*args)[/^Revision:\s+(\d+)/m, 1]
+    end
   end
 
   def revision=(desired)
-    args = buildargs.push('update', '-r', desired, @resource.value(:path))
-    svn(*args)
+    args = if @resource.value(:source)
+             buildargs.push('switch', '-r', desired, @resource.value(:source))
+           else
+             buildargs.push('update', '-r', desired)
+           end
+
+    if @resource.value(:conflict)
+      args.push('--accept', @resource.value(:conflict))
+    end
+
+    at_path do
+      svn(*args)
+    end
     update_owner
   end
 
@@ -92,6 +128,9 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
     end
     if revision
       args.push('-r', revision)
+    end
+    if depth
+      args.push('--depth', depth)
     end
     args.push(source, path)
     svn(*args)
