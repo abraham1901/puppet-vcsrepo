@@ -111,7 +111,7 @@ Puppet::Type.type(:vcsrepo).provide(:svn, :parent => Puppet::Provider::Vcsrepo) 
 
   private
 
-  def checkout_repository(source, path, revision)
+  def checkout_repository(source, path, revision, depth)
 	has_should = [:export, :filename, :sparse ].select { |param| @resource.value(param) == :true }
     if has_should.length > 1
       raise Puppet::Error, "You cannot specify #{has_should.join(" and ")} on this action (only one)"
